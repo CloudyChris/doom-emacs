@@ -19,7 +19,12 @@ If FORCE-P is omitted when `window-size-fixed' is non-nil, resizing will fail."
 Returns t if it is safe to kill this session. Does not prompt if no real buffers
 are open."
   (or (not (ignore-errors (doom-real-buffer-list)))
-      (yes-or-no-p (format "%s" (or prompt "Really quit Emacs?")))
+      (if use-dialog-box
+          (x-popup-dialog
+           t `("Really quit Emacs?"
+               ("Yes" . t)
+               ("Cancel" . nil)))
+        (yes-or-no-p (format "%s" (or prompt "Really quit Emacs?"))))
       (ignore (message "Aborted"))))
 
 
@@ -200,7 +205,7 @@ narrowing doesn't affect other windows displaying the same buffer. Call
 Inspired from http://demonastery.org/2013/04/emacs-evil-narrow-region/"
   (interactive (if (region-active-p)
                    (list (doom-region-beginning) (doom-region-end))
-                 (list (bol) (eol))))
+                 (list (pos-bol) (pos-eol))))
   (deactivate-mark)
   (let ((orig-buffer (current-buffer)))
     (with-current-buffer (switch-to-buffer (clone-indirect-buffer nil nil))
@@ -241,7 +246,7 @@ If the current buffer is not an indirect buffer, it is `widen'ed."
   "Narrow the buffer to BEG END. If narrowed, widen it."
   (interactive (if (region-active-p)
                    (list (doom-region-beginning) (doom-region-end))
-                 (list (bol) (eol))))
+                 (list (pos-bol) (pos-eol))))
   (if (buffer-narrowed-p)
       (widen)
     (narrow-to-region beg end)))

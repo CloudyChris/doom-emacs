@@ -1,4 +1,4 @@
 ;; -*- no-byte-compile: t; -*-
 ;;; editor/parinfer/packages.el
 
-(package! parinfer-rust-mode :pin "c611628fbe67ed26da9653d019a1b1211697e8af")
+(package! parinfer-rust-mode :pin "d5578ec0b2e907cb1a2600057f524135c4553050")

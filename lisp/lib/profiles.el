@@ -10,14 +10,15 @@ Profile directories are in the format {data-profiles-dir}/$NAME/@/$VERSION, for
 example: '~/.local/share/doom/_/@/0/'")
 
 (defvar doom-profile-load-path
-  (if-let (path (getenv-internal "DOOMPROFILELOADPATH"))
-      (mapcar #'expand-file-name (split-string-and-unquote path path-separator))
-    (list (file-name-concat doom-user-dir "profiles.el")
-          (file-name-concat doom-emacs-dir "profiles.el")
-          (expand-file-name "doom-profiles.el" (or (getenv "XDG_CONFIG_HOME") "~/.config"))
-          (expand-file-name "~/.doom-profiles.el")
-          (file-name-concat doom-user-dir "profiles")
-          (file-name-concat doom-emacs-dir "profiles")))
+  (append
+   (when-let* ((path (getenv-internal "DOOMPROFILELOADPATH")))
+     (mapcar #'doom-path (split-string-and-unquote path path-separator)))
+   (list (file-name-concat doom-user-dir "profiles.el")
+         (file-name-concat doom-emacs-dir "profiles.el")
+         (expand-file-name "doom-profiles.el" (or (getenv "XDG_CONFIG_HOME") "~/.config"))
+         (expand-file-name "~/.doom-profiles.el")
+         (file-name-concat doom-user-dir "profiles")
+         (file-name-concat doom-emacs-dir "profiles")))
   "A list of profile config files or directories that house implicit profiles.
 
 `doom-profiles-initialize' loads and merges all profiles defined in the above
@@ -41,14 +42,21 @@ list of paths or profile config files (semi-colon delimited on Windows).")
 
 Can be changed externally by setting $DOOMPROFILELOADFILE.")
 
+(defvar doom-profile-cache-file
+  (file-name-concat
+   doom-cache-dir (format "profiles.%s.el" (or (car doom-profile) "@")))
+  "Where Doom writes its interactive profile loader script.
+
+Can be changed externally by setting $DOOMPROFILELOADFILE.")
+
 (defvar doom-profile-env-file-name "init.env.el"
-  "TODO")
+  "The filename for a Doom profile's envvar file.")
 
 (defvar doom-profile-init-dir-name (format "init.%d.d" emacs-major-version)
   "The subdirectory of `doom-profile-dir'")
 
 (defvar doom-profile-rcfile ".doomprofile"
-  "TODO")
+  "The filename for local user configuration of a Doom profile.")
 
 ;;; Profile storage variables
 (defvar doom-profile-generators
@@ -83,10 +91,16 @@ run.")
 ;;; Helpers
 
 (defun doom-profiles-bootloadable-p ()
-  "Return non-nil if `doom-emacs-dir' can be a bootloader."
+  "Return non-nil if `doom-emacs-dir' can be a bootloader.
+
+This means it must be deployed to $XDG_CONFIG_HOME/emacs or $HOME/.emacs.d. Doom
+cannot bootload from an arbitrary location."
   (with-memoization (get 'doom 'bootloader)
-    (or (file-equal-p doom-emacs-dir "~/.config/emacs")
-        (file-equal-p doom-emacs-dir "~/.emacs.d"))))
+    (or (file-equal-p doom-emacs-dir "~/.emacs.d")
+        (file-equal-p
+         doom-emacs-dir (expand-file-name
+                         "emacs/" (or (getenv "XDG_CONFIG_HOME")
+                                      "~/.config"))))))
 
 (defun doom-profiles-read (&rest paths)
   "TODO"
@@ -107,7 +121,7 @@ run.")
                                      `(,val)
                                    `(,(abbreviate-file-name path) ,val))))
                        (cons `(user-emacs-directory :path ,@val)
-                             (if-let (profile-file (file-exists-p! doom-profile-rcfile path))
+                             (if-let* ((profile-file (file-exists-p! doom-profile-rcfile path)))
                                  (car (doom-file-read profile-file :by 'read*))
                                (when (file-exists-p (doom-path path subdir "lisp/doom.el"))
                                  '((doom-user-dir :path ,@val)))))))
@@ -248,12 +262,6 @@ caches them in `doom--profiles'. If RELOAD? is non-nil, refresh the cache."
       (with-file-modes #o750
         (print-group!
           (make-directory init-dir t)
-          (print! (start "Deleting old init files..."))
-          (print-group! :level 'info
-            (cl-loop for file in (cons init-file (doom-glob "*.elc"))
-                     if (file-exists-p file)
-                     do (print! (item "Deleting %s...") file)
-                     and do (delete-file file)))
           (let ((auto-files (doom-glob init-dir "*.auto.el")))
             (print! (start "Generating %d init files...") (length doom-profile-generators))
             (print-group! :level 'info

@@ -69,10 +69,10 @@
        (delq nil (mapcar #'doom-gc--repo repos))))))
 
 (defun doom-gc--eln ()
-  (if-let (dirs
-           (cl-delete (expand-file-name comp-native-version-dir doom-packages--eln-output-path)
-                      (directory-files doom-packages--eln-output-path t "^[^.]" t)
-                      :test #'file-equal-p))
+  (if-let* ((dirs
+             (cl-delete (expand-file-name comp-native-version-dir doom-packages--eln-output-path)
+                        (directory-files doom-packages--eln-output-path t "^[^.]" t)
+                        :test #'file-equal-p)))
       (progn
         (print! (start "Purging old native bytecode..."))
         (print-group!
@@ -125,7 +125,6 @@
 ;;
 ;;; Commands
 
-;;;###autoload
 (defcli! (gc)
     ((nobuilds-p  ("-b" "--no-builds")  "Don't purge unneeded (built) packages")
      (noelpa-p    ("-p" "--no-elpa")    "Don't purge ELPA packages")
@@ -183,9 +182,6 @@ remains lean."
                 (doom-gc--eln)))))))
   t)
 
-;;;###autoload
-(defcli-obsolete! ((purge p)) (gc) "3.0.0")
-
 ;; (defcli! gc
 ;;     ((keep           (     "--keep" time)     "Don't delete generations in the last TIME units")
 ;;      (keep-last      (     "--keep-last" num) "Don't delete last NUM generations")
@@ -194,5 +190,5 @@ remains lean."
 ;;      (keep-history-p (     "--keep-history")  "Don't regraft repos"))
 ;;   "Purge unused profile data, generations, and packages.")
 
-(provide 'doom-cli '(gc))
+(provide 'doom-cli-gc)
 ;;; gc.el ends here

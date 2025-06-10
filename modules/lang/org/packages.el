@@ -31,11 +31,11 @@
                          (format "(defun org-git-version (&rest _) \"%s-??-%s\")\n"
                                  version (cdr (doom-call-process "git" "rev-parse" "--short" "HEAD")))
                          "(provide 'org-version)\n")))))
-  :pin "6a5d0ed342efeb3a4c402672fbe9bfebd80af8b6")  ; release_9.7.11
+  :pin "79781bac69896150fd617e5fde65905fa4822b72")  ; release_9.7.29
 (package! org-contrib
   :recipe (:host github
            :repo "emacsmirror/org-contrib")
-  :pin "f22bdd6a580953a10df1f218e65cf250ac0ae87c")
+  :pin "f1f6b6ec812803ff99693255555a82960fb3545a")
 
 (package! avy)
 (package! htmlize :pin "8e3841c837b4b78bd72ad7f0436e919f39315a46")
@@ -47,7 +47,7 @@
 (when (modulep! +contacts)
   (package! org-contacts
     :recipe (:host github :repo "doomelpa/org-contacts")
-    :pin "f0a430442b2ae60035dcd74fc6a76299875694f3"))
+    :pin "b06a59736800865b8a7e8d6d45774169cb31528a"))
 
 (when (and (featurep :system 'macos)
            (modulep! :os macos))
@@ -64,11 +64,11 @@
     :recipe (:host github :repo "doomelpa/evil-org-mode")
     :pin "06518c65ff4f7aea2ea51149d701549dcbccce5d"))
 (when (modulep! :tools pdf)
-  (package! org-pdftools :pin "4e420233a153a9c4ab3d1a7e1d7d3211c836f0ac"))
+  (package! org-pdftools :pin "5613b7ae561e0af199f25aacc0a9c34c16638408"))
 (when (modulep! :tools magit)
-  (package! orgit :pin "59d21fdb21f84238c3172d37fdd2446b753e98dc")
+  (package! orgit :pin "efd98e5caaac1d08677dae95be40fab65dcda2c8")
   (when (modulep! :tools magit +forge)
-    (package! orgit-forge :pin "2718a6aaf0f64cb52c64c419053fbc80eb358c8d")))
+    (package! orgit-forge :pin "764820769e321a76622aaafe7617b4231985b5f0")))
 (when (modulep! +brain)
   (package! org-brain :pin "2bad7732aae1a3051e2a14de2e30f970bbe43c25"))
 (when (modulep! +dragndrop)
@@ -77,27 +77,26 @@
   (package! gnuplot :pin "4c6b18f71ff7604e2640033207f5a882ddce78af")
   (package! gnuplot-mode :pin "601f6392986f0cba332c87678d31ae0d0a496ce7"))
 (when (modulep! +jupyter)
-  (package! jupyter :pin "e966c5d3d6ac147992832af69135655290072042"))
+  (package! jupyter :pin "3615c2de16988c4dd9d1978bfa10ee3092e85b33"))
 (when (modulep! +journal)
-  (package! org-journal :pin "17b34ce8df9649a73b715c13698220bde1628668"))
+  (package! org-journal :pin "e581bf5530054a40f933fdcc41e65aa0eedbd7da"))
 (when (modulep! +noter)
-  (package! org-noter :pin "691efc3ed4a2828d791a148e53851365c2eb380f"))
+  (package! org-noter :pin "a28f61238a572dd9f0073c2ee15a951ffe6aaebc"))
 (when (modulep! +pomodoro)
   (package! org-pomodoro :pin "3f5bcfb80d61556d35fc29e5ddb09750df962cc6"))
 (when (modulep! +pretty)
-  (package! org-appear :pin "32ee50f8fdfa449bbc235617549c1bccb503cb09")
-  (package! org-superstar :pin "54c81c27dde2a6dc461bb064e79a8b2089093a2e")
-  (package! org-fancy-priorities :pin "7f677c6c14ecf05eab8e0efbfe7f1b00ae68eb1d"))
+  (package! org-modern :pin "6158d3d0070694bfc5ff09235dec4661b8ba28dd")
+  (package! org-appear :pin "32ee50f8fdfa449bbc235617549c1bccb503cb09"))
 (when (modulep! +present)
   (package! centered-window
     :recipe (:host github :repo "anler/centered-window-mode")
     :pin "80965f6c6afe8d918481433984b493de72af5399")
   (package! org-tree-slide :pin "e2599a106a26ce5511095e23df4ea04be6687a8a")
-  (package! org-re-reveal :pin "91610ba9b010b05c52ae7ab77a7890851222db06")
+  (package! org-re-reveal :pin "89ed240450fd6ebfa7ea2da8de15e1f445d1579f")
   (package! revealjs
     :recipe (:host github :repo "hakimel/reveal.js"
              :files ("css" "dist" "js" "plugin"))
-    :pin "0d02d8a303a39b02c919d86c94ec477d1e1b107d"))
+    :pin "eb95b14531a1d52a616553759bd1c383cc1d01fc"))
 (cond
  ((modulep! +roam)
   (package! org-roam
@@ -108,7 +107,7 @@
     ;; FIXME A :recipe isn't strictly necessary, but without it, our package
     ;;       bumper fails to distinguish between org-roam v1 and v2.
     :recipe (:host github :repo "org-roam/org-roam")
-    :pin "2a630476b3d49d7106f582e7f62b515c62430714")
+    :pin "046822b512ffecdee7d110f73dd3a511802ca590")
   (when (< emacs-major-version 29)
     ;; HACK: Needed until org-roam/org-roam#2485 is resolved.
     (package! emacsql :pin "491105a01f58bf0b346cbc0254766c6800b229a2"))))
@@ -149,10 +148,10 @@
 
 ;;; Export
 (when (modulep! +pandoc)
-  (package! ox-pandoc :pin "34e6ea97b586e20529d07158a73af3cf33cdd1d5"))
+  (package! ox-pandoc :pin "5766c70b6db5a553829ccdcf52fcf3c6244e443d"))
 (when (modulep! +hugo)
   (package! ox-hugo
     :recipe (:host github :repo "kaushalmodi/ox-hugo" :nonrecursive t)
-    :pin "98421a1298adc6d80ce21b3cb5c951af818b27bf"))
+    :pin "e3365cb4e65c1853d8838b863a21546bbd9e0990"))
 (when (modulep! :lang rst)
-  (package! ox-rst :pin "99fa790da55b57a3f2e9aa187493ba434a64250e"))
+  (package! ox-rst :pin "b73eff187eebac24b457688bfd27f09eff434860"))

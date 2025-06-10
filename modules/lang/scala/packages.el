@@ -2,8 +2,8 @@
 ;;; lang/scala/packages.el
 
 (package! sbt-mode :pin "cc68728a6ef0600aad369157b3a2d0ce56afba9b")
-(package! scala-mode :pin "bd0638c32ab0f2eadacf2809329abf5388211760")
+(package! scala-mode :pin "661337d8aa0a0cb418184c83757661603de3b2e3")
 
 (when (and (modulep! +lsp)
            (modulep! :tools lsp -eglot))
-  (package! lsp-metals :pin "b5139c959336758a93d0e55458e6ca938d9fd16a"))
+  (package! lsp-metals :pin "e1d9d04f3bab7e6e74916054b36ab1a87e831367"))

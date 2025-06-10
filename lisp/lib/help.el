@@ -102,6 +102,25 @@ selection of all minor-modes, active or not."
     (funcall (or (command-remapping fn) fn)
              symbol)))
 
+;;;###autoload
+(defun doom/describe-char (event)
+  "Like `describe-char', but will operate at mouse point if given prefix arg."
+  (interactive
+   (list (if current-prefix-arg
+             (save-window-excursion
+               (message "Click what to describe...")
+               (or (when-let ((evt (read--potential-mouse-event)))
+                     ;; Discard mouse release event
+                     (read--potential-mouse-event)
+                     (cadr evt))
+                   (user-error "Aborted")))
+           (point))))
+  (if (integerp event)
+      (describe-char event)
+    (when event
+      (with-selected-window (posn-window event)
+        (describe-char (posn-point event))))))
+
 
 ;;
 ;;; Documentation commands
@@ -157,7 +176,7 @@ selection of all minor-modes, active or not."
          (append (apply #'doom--org-headings files plist)
                  extra-candidates))
         ivy-sort-functions-alist)
-    (if-let (result (completing-read prompt alist nil nil initial-input))
+    (if-let* ((result (completing-read prompt alist nil nil initial-input)))
         (cl-destructuring-bind (file &optional location)
             (cdr (assoc result alist))
           (if action
@@ -557,7 +576,7 @@ If prefix arg is present, refresh the cache."
           (`straight
            (insert "Straight\n")
            (package--print-help-section "Pinned")
-           (insert (if-let (pin (plist-get (cdr (assq package doom-packages)) :pin))
+           (insert (if-let* ((pin (plist-get (cdr (assq package doom-packages)) :pin)))
                        pin
                      "unpinned")
                    "\n")
@@ -642,7 +661,7 @@ If prefix arg is present, refresh the cache."
               (insert ")\n"))))
 
         (package--print-help-section "Configs")
-        (if-let ((configs (doom--help-package-configs package)))
+        (if-let* ((configs (doom--help-package-configs package)))
             (progn
               (insert "This package is configured in the following locations:")
               (dolist (location configs)

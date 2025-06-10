@@ -55,6 +55,9 @@ You should use `set-eshell-alias!' to change this.")
 ;;; Packages
 
 (after! eshell ; built-in
+  (set-lookup-handlers! 'eshell-mode
+    :documentation #'+eshell-lookup-documentation)
+
   (setq eshell-banner-message
         '(format "%s %s\n"
                  (propertize (format " %s " (string-trim (buffer-name)))
@@ -82,6 +85,16 @@ You should use `set-eshell-alias!' to change this.")
   (add-hook 'eshell-mode-hook #'+eshell-init-h)
   (add-hook 'eshell-exit-hook #'+eshell-cleanup-h)
 
+  ;; UX: Temporarily disable undo history between command executions. Undo can
+  ;;   destroy output while it's being printed to stdout.
+  (let (old-undo-list)
+    (add-hook! 'eshell-pre-command-hook
+      (setq old-undo-list buffer-undo-list
+            buffer-undo-list nil))
+    (add-hook! 'eshell-post-command-hook
+      (setq buffer-undo-list old-undo-list)
+      (clrhash undo-equiv-table)))
+
   ;; Enable autopairing in eshell
   (add-hook 'eshell-mode-hook #'smartparens-mode)
 
@@ -92,9 +105,6 @@ You should use `set-eshell-alias!' to change this.")
 
   ;; UI enhancements
   (add-hook! 'eshell-mode-hook
-    (defun +eshell-remove-fringes-h ()
-      (set-window-fringes nil 0 0)
-      (set-window-margins nil 1 nil))
     (defun +eshell-enable-text-wrapping-h ()
       (visual-line-mode +1)
       (set-display-table-slot standard-display-table 0 ?\ )))
@@ -221,7 +231,24 @@ Emacs versions < 29."
 
 (use-package! esh-help
   :after eshell
-  :config (setup-esh-help-eldoc))
+  :config
+  (setup-esh-help-eldoc)
+  ;; HACK: Fixes tom-tan/esh-help#7.
+  (defadvice! +eshell-esh-help-eldoc-man-minibuffer-string-a (cmd)
+    "Return minibuffer help string for the shell command CMD.
+Return nil if there is none."
+    :override #'esh-help-eldoc-man-minibuffer-string
+    (if-let* ((cache-result (gethash cmd esh-help-man-cache)))
+        (unless (eql 'none cache-result)
+          cache-result)
+      (let ((str (split-string (esh-help-man-string cmd) "\n")))
+        (if (equal (concat "No manual entry for " cmd) (car str))
+            (ignore (puthash cmd 'none esh-help-man-cache))
+          (puthash
+           cmd (when-let* ((str (seq-drop-while (fn! (not (string-match-p "^SYNOPSIS$" %))) str))
+                           (str (nth 1 str)))
+                 (substring str (string-match-p "[^\s\t]" str)))
+           esh-help-man-cache))))))
 
 
 (use-package! eshell-did-you-mean
@@ -241,7 +268,29 @@ Emacs versions < 29."
 
 (use-package eshell-syntax-highlighting
   :hook (eshell-mode . eshell-syntax-highlighting-mode)
-  :init
+  :config
+  (defadvice! +eshell-filter-history-from-highlighting-a (&rest _)
+    "Selectively inhibit `eshell-syntax-highlighting-mode'.
+So that mathces from history show up with highlighting."
+    :before-until #'eshell-syntax-highlighting--enable-highlighting
+    (memq this-command '(eshell-previous-matching-input-from-input
+                         eshell-next-matching-input-from-input)))
+
+  (defun +eshell-syntax-highlight-maybe-h ()
+    "Hook added to `pre-command-hook' to restore syntax highlighting
+when inhibited to show history matches."
+    (when (and eshell-syntax-highlighting-mode
+               (memq last-command '(eshell-previous-matching-input-from-input
+                                    eshell-next-matching-input-from-input)))
+      (eshell-syntax-highlighting--enable-highlighting)))
+
+  (add-hook! 'eshell-syntax-highlighting-elisp-buffer-setup-hook
+    (defun +eshell-syntax-highlighting-mode-h ()
+      "Hook to enable `+eshell-syntax-highlight-maybe-h'."
+      (if eshell-syntax-highlighting-mode
+          (add-hook 'pre-command-hook #'+eshell-syntax-highlight-maybe-h nil t)
+        (remove-hook 'pre-command-hook #'+eshell-syntax-highlight-maybe-h t))))
+
   (add-hook 'eshell-syntax-highlighting-elisp-buffer-setup-hook #'highlight-quoted-mode))
 
 

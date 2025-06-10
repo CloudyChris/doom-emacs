@@ -46,6 +46,7 @@
        tabs              ; a tab bar for Emacs
        (treemacs +lsp)   ; a project drawer, like neotree but cooler
        unicode           ; extended unicode support for various languages
+       ;;smooth-scroll     ; So smooth you won't believe it's not butter
        (vc-gutter +pretty) ; vcs diff in the fringe
        vi-tilde-fringe   ; fringe tildes to mark beyond EOB
        window-select     ; visually switch windows
@@ -97,11 +98,11 @@
        (eval +overlay)     ; run code, run (also, repls)
        lookup              ; navigate your code and its documentation
        lsp               ; M-x vscode
+       ;;llm               ; when I said you needed friends, I didn't mean...
        magit             ; a git porcelain for Emacs
        make              ; run make tasks from Emacs
        pass              ; password manager for nerds
        ;;pdf               ; pdf enhancements
-       ;;prodigy           ; FIXME managing external services & code builders
        ;;terraform         ; infrastructure as code
        ;;tmux              ; an API for interacting with tmux
        tree-sitter       ; syntax and parsing, sitting in a tree...
@@ -140,6 +141,7 @@
        ;;hy                ; readability of scheme w/ speed of python
        ;;idris             ; a language you can depend on
        json              ; At least it ain't XML
+       ;;janet             ; Fun fact: Janet is me!
        ;;(java +lsp)       ; the poster child for carpal tunnel syndrome
        javascript        ; all(hope(abandon(ye(who(enter(here))))))
        ;;julia             ; a better, faster MATLAB

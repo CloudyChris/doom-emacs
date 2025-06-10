@@ -40,9 +40,9 @@ TYPE should be a keyword of any of the known doom-*-error errors (e.g. :font,
 
 (defvar doom-log-level
   (if init-file-debug
-      (if-let ((level (getenv-internal "DEBUG"))
-               (level (string-to-number level))
-               ((not (zerop level))))
+      (if-let* ((level (getenv-internal "DEBUG"))
+                (level (if (string-empty-p level) 1 (string-to-number level)))
+                ((not (zerop level))))
           level
         2)
     0)
@@ -246,7 +246,7 @@ unreadable. Returns the names of envvars that were changed."
 (defun doom-run-hook (hook)
   "Run HOOK (a hook function) with better error handling.
 Meant to be used with `run-hook-wrapped'."
-  (doom-log "hook:%s: run %s" (or doom--hook '*) hook)
+  (doom-log 2 "hook:%s: run %s" (or doom--hook '*) hook)
   (condition-case-unless-debug e
       (funcall hook)
     (error
@@ -313,7 +313,7 @@ TRIGGER-HOOK is a list of quoted hooks and/or sharp-quoted functions."
   (with-memoization (get 'doom-compile-function 'timer)
     (run-with-idle-timer
      1.5 t (fn! (when-let (fn (pop fns))
-                  (doom-log "compile-functions: %s" fn)
+                  (doom-log 3 "compile-functions: %s" fn)
                   (or (if (featurep 'native-compile)
                           (or (subr-native-elisp-p (indirect-function fn))
                               (ignore-errors (native-compile fn))))
@@ -323,6 +323,47 @@ TRIGGER-HOOK is a list of quoted hooks and/or sharp-quoted functions."
                 (unless fns
                   (cancel-timer (get 'doom-compile-function 'timer))
                   (put 'doom-compile-function 'timer nil))))))
+
+
+;;
+;;; Deep copying
+
+(cl-defgeneric doom-copy (val &optional deep?)
+  "Return a (optionally deep) copy of VAL."
+  (if (recordp val)  ; `record' specializer not supported until Emacs 30
+      (if deep?
+          (cl-loop with newval = (copy-sequence val)
+                   for idx from 1 to (length (cdr (cl-struct-slot-info (type-of val))))
+                   do (aset newval idx (doom-copy (aref newval idx) t))
+                   finally return newval)
+        (copy-sequence val))
+    (cl-check-type val (or integer float boolean symbol null))
+    val))
+
+(cl-defmethod doom-copy ((val sequence) &optional deep?)
+  "Return a (optionally deep) copy of sequence VAL."
+  (if (stringp val)
+      (if deep? val (purecopy val))
+    (if deep?
+        (when-let ((newval (mapcar (doom-rpartial #'doom-copy t) val)))
+          (if (vectorp val)
+              (apply #'vector newval)
+            newval))
+      (copy-sequence val))))
+
+(cl-defmethod doom-copy ((val cons) &optional deep?)
+  "Return a (optionally deep) copy of cons cell/list VAL."
+  (cons (doom-copy (car val) deep?)
+        (doom-copy (cdr val) deep?)))
+
+(cl-defmethod doom-copy ((val hash-table) &optional deep?)
+  "Return a (optionally deep) copy of hash table VAL."
+  (let ((table (copy-hash-table val)))
+    (when deep?
+      (maphash (lambda (key val)
+                 (puthash key (doom-copy val t) table))
+               table))
+    table))
 
 
 ;;
@@ -343,8 +384,7 @@ TRIGGER-HOOK is a list of quoted hooks and/or sharp-quoted functions."
   (let (file-name-handler-alist)
     (file-name-directory (macroexpand '(file!)))))
 
-;; REVIEW Should I deprecate this? The macro's name is so long...
-(defalias 'letenv! 'with-environment-variables)
+(define-obsolete-function-alias 'letenv! 'with-environment-variables "3.0.0")
 
 (put 'defun* 'lisp-indent-function 'defun)
 (defmacro letf! (bindings &rest body)
@@ -446,22 +486,8 @@ echo-area, but not to *Messages*."
                (save-silently t))
            (prog1 ,@forms (message ""))))))
 
-(defmacro eval-if! (cond then &rest body)
-  "Expands to THEN if COND is non-nil, to BODY otherwise.
-COND is checked at compile/expansion time, allowing BODY to be omitted entirely
-when the elisp is byte-compiled. Use this for forms that contain expensive
-macros that could safely be removed at compile time."
-  (declare (indent 2))
-  (if (eval cond)
-      then
-    (macroexp-progn body)))
-
-(defmacro eval-when! (cond &rest body)
-  "Expands to BODY if CONDITION is non-nil at compile/expansion time.
-See `eval-if!' for details on this macro's purpose."
-  (declare (indent 1))
-  (when (eval cond)
-    (macroexp-progn body)))
+(define-obsolete-function-alias 'eval-if! 'static-if "3.0.0")
+(define-obsolete-function-alias 'eval-when! 'static-when "3.0.0")
 
 (defmacro versionp! (v1 comp v2 &rest comps)
   "Perform compound version checks.
@@ -591,7 +617,7 @@ minus font-locking and the outer function call, plus some minor optimizations."
   "Returns (lambda () (interactive) ,@body)
 A factory for quickly producing interaction commands, particularly for keybinds
 or aliases."
-  (declare (doc-string 1) (pure t) (side-effect-free t))
+  (declare (doc-string 1))
   `(lambda (&rest _) (interactive) ,@body))
 
 (defmacro cmd!! (command &optional prefix-arg &rest args)
@@ -668,8 +694,10 @@ See `general-key-dispatch' for what other arguments it accepts in BRANCHES."
 
 
 ;;; Mutation
+;; DEPRECATED: Remove in v3.0
 (defmacro appendq! (sym &rest lists)
   "Append LISTS to SYM in place."
+  (declare (obsolete "Use `cl-callf2' instead" "3.0.0"))
   `(setq ,sym (append ,sym ,@lists)))
 
 (defmacro setq! (&rest settings)
@@ -683,10 +711,12 @@ Unlike `setopt', this won't needlessly pull in dependencies."
             collect `(funcall (or (get ',var 'custom-set) #'set-default-toplevel-value)
                               ',var ,val))))
 
+;; DEPRECATED: Remove in v3.0
 (defmacro delq! (elt list &optional fetcher)
   "`delq' ELT from LIST in-place.
 
 If FETCHER is a function, ELT is used as the key in LIST (an alist)."
+  (declare (obsolete "Use `cl-callf2' or `alist-get' instead" "3.0.0"))
   `(setq ,list (delq ,(if fetcher
                           `(funcall ,fetcher ,elt ,list)
                         elt)
@@ -699,8 +729,10 @@ This is a variadic `cl-pushnew'."
     `(dolist (,var (list ,@values) (with-no-warnings ,place))
        (cl-pushnew ,var ,place :test #'equal))))
 
+;; DEPRECATED: Remove in v3.0
 (defmacro prependq! (sym &rest lists)
   "Prepend LISTS to SYM in place."
+  (declare (obsolete "Use `cl-callf2' instead" "3.0.0"))
   `(setq ,sym (append ,@lists ,sym)))
 
 
@@ -799,7 +831,7 @@ to reverse this and trigger `after!' blocks at a more reasonable time."
   (let ((advice-fn (intern (format "doom--defer-feature-%s-a" feature)))
         (fns (or fns (list feature))))
     `(progn
-       (delq! ',feature features)
+       (cl-callf2 delq ',feature features)
        (defadvice! ,advice-fn (&rest _)
          :before ',fns
          ;; Some plugins (like yasnippet) will invoke a fn early to parse
@@ -913,9 +945,7 @@ If N and M = 1, there's no benefit to using this macro over `remove-hook'.
   (declare (indent 1))
   (macroexp-progn
    (cl-loop for (var val hook fn) in (doom--setq-hook-fns hooks var-vals)
-            collect `(defun ,fn (&rest _)
-                       ,(format "%s = %s" var (pp-to-string val))
-                       (setq-local ,var ,val))
+            collect `(defun ,fn (&rest _) (setq-local ,var ,val))
             collect `(add-hook ',hook #',fn -90))))
 
 (defmacro unsetq-hook! (hooks &rest vars)
@@ -955,8 +985,8 @@ DOCSTRING and BODY are as in `defun'.
 (defmacro undefadvice! (symbol _arglist &optional docstring &rest body)
   "Undefine an advice called SYMBOL.
 
-This has the same signature as `defadvice!' an exists as an easy undefiner when
-testing advice (when combined with `rotate-text').
+This has the same signature as `defadvice!' and exists as an easy undefiner when
+interactively testing (and toggling) advice.
 
 \(fn SYMBOL ARGLIST &optional DOCSTRING &rest [WHERE PLACES...] BODY\)"
   (declare (doc-string 3) (indent defun))
@@ -969,108 +999,6 @@ testing advice (when combined with `rotate-text').
     `(dolist (targets (list ,@(nreverse where-alist)))
        (dolist (target (cdr targets))
          (advice-remove target #',symbol)))))
-
-
-;;
-;;; Backports
-
-(defmacro defbackport! (type symbol &rest body)
-  "Backport a function/macro/alias from later versions of Emacs."
-  (declare (indent defun) (doc-string 4))
-  (unless (fboundp (doom-unquote symbol))
-    `(,type ,symbol ,@body)))
-
-;; `format-spec' wasn't autoloaded until 28.1
-(defbackport! autoload 'format-spec "format-spec")
-
-;; Introduced in Emacs 28.1
-(defbackport! defun ensure-list (object)
-  "Return OBJECT as a list.
-If OBJECT is already a list, return OBJECT itself.  If it's
-not a list, return a one-element list containing OBJECT."
-  (declare (pure t) (side-effect-free t))
-  (if (listp object) object (list object)))
-
-;; Introduced in Emacs 28.1
-(defbackport! defun always (&rest _args)
-  "Do nothing and return t.
-This function accepts any number of ARGUMENTS, but ignores them.
-Also see `ignore'."
-  t)
-
-;; Introduced in Emacs 28.1
-(defbackport! defun file-name-concat (directory &rest components)
-  "Append COMPONENTS to DIRECTORY and return the resulting string.
-
-Elements in COMPONENTS must be a string or nil.
-DIRECTORY or the non-final elements in COMPONENTS may or may not end
-with a slash -- if they don't end with a slash, a slash will be
-inserted before contatenating."
-  (mapconcat
-   #'identity
-   (cl-loop for str in (cons directory components)
-            if (and str (/= 0 (length str))
-                    (if (string-suffix-p "/" str)
-                        (substring str 0 -1)
-                      str))
-            collect it)
-   "/"))
-
-;; Introduced in Emacs 28.1
-(defbackport! defmacro with-environment-variables (variables &rest body)
-  "Set VARIABLES in the environment and execute BODY.
-VARIABLES is a list of variable settings of the form (VAR VALUE),
-where VAR is the name of the variable (a string) and VALUE
-is its value (also a string).
-
-The previous values will be restored upon exit."
-  (declare (indent 1) (debug (sexp body)))
-  (unless (consp variables)
-    (error "Invalid VARIABLES: %s" variables))
-  `(let ((process-environment (copy-sequence process-environment)))
-     ,@(cl-loop for var in variables
-                collect `(setenv ,(car var) ,(cadr var)))
-     ,@body))
-
-;; Introduced in Emacs 28.1
-(defbackport! defun file-name-with-extension (filename extension)
-  "Return FILENAME modified to have the specified EXTENSION.
-The extension (in a file name) is the part that begins with the last \".\".
-This function removes any existing extension from FILENAME, and then
-appends EXTENSION to it.
-
-EXTENSION may include the leading dot; if it doesn't, this function
-will provide it.
-
-It is an error if FILENAME or EXTENSION is empty, or if FILENAME
-is in the form of a directory name according to `directory-name-p'.
-
-See also `file-name-sans-extension'."
-  (let ((extn (string-trim-left extension "[.]")))
-    (cond ((string-empty-p filename)
-           (error "Empty filename"))
-          ((string-empty-p extn)
-           (error "Malformed extension: %s" extension))
-          ((directory-name-p filename)
-           (error "Filename is a directory: %s" filename))
-          ((concat (file-name-sans-extension filename) "." extn)))))
-
-;; Introduced in Emacs 29+
-(defbackport! defmacro with-memoization (place &rest code)
-  "Return the value of CODE and stash it in PLACE.
-If PLACE's value is non-nil, then don't bother evaluating CODE
-and return the value found in PLACE instead."
-  (declare (indent 1) (debug (gv-place body)))
-  (gv-letplace (getter setter) place
-    `(or ,getter
-         ,(macroexp-let2 nil val (macroexp-progn code)
-            `(progn
-               ,(funcall setter val)
-               ,val)))))
-
-;; Introduced in Emacs 29+ (emacs-mirror/emacs@f117b5df4dc6)
-(defbackport! defalias 'bol #'line-beginning-position)
-(defbackport! defalias 'eol #'line-end-position)
 
 
 ;;; Types
@@ -1144,7 +1072,7 @@ All valid contexts:
 (put 'doom-context 'risky-local-variable t)
 
 (defun doom-context-p (contexts)
-  "Return t if all CONTEXTS are active, nil otherwise.
+  "Return non-nil if all CONTEXTS are active.
 
 See `doom-context' for possible values for CONTEXT."
   (declare (side-effect-free t))
@@ -1156,12 +1084,12 @@ See `doom-context' for possible values for CONTEXT."
           (throw 'result nil))))))
 
 (defun doom-context-valid-p (context)
-  "Return non-nil if CONTEXT is a valid `doom-context'."
+  "Return non-nil if CONTEXT (a symbol) is a valid `doom-context'."
   (declare (pure t) (side-effect-free error-free))
   (memq context (get 'doom-context 'valid)))
 
 (defun doom-context-push (contexts)
-  "Add CONTEXTS to `doom-context', if not present.
+  "Add CONTEXTS (a symbol or list thereof) to `doom-context', if not present.
 
 Return list of successfully added contexts. Throws a `doom-context-error' if
 CONTEXTS contains invalid contexts."
@@ -1182,7 +1110,7 @@ CONTEXTS contains invalid contexts."
           added)))))
 
 (defun doom-context-pop (contexts)
-  "Remove CONTEXTS from `doom-context'.
+  "Remove CONTEXTS (a symbol or list thereof) from `doom-context'.
 
 Return list of removed contexts if successful. Throws `doom-context-error' if
 one of CONTEXTS isn't active."
@@ -1218,8 +1146,12 @@ Never set this variable directly, use `with-doom-module'.")
 (defmacro with-doom-module (key &rest body)
   "Evaluate BODY with `doom-module-context' informed by KEY."
   (declare (indent 1))
-  `(let ((doom-module-context (doom-module-context ,key)))
-     (doom-log ":context:module: =%s" doom-module-context)
+  `(let ((doom-module-context
+          (let ((key ,key))
+            (if key
+                (doom-module-context key)
+              (make-doom-module-context)))))
+     (doom-log 2 ":context:module: =%s" doom-module-context)
      ,@body))
 
 (defun doom-module-context (key)
@@ -1405,7 +1337,7 @@ NAME is a symbol (e.g. \\='python). FILE is a string that will be appended to
 the resulting path. If said path doesn't exist, this returns nil, otherwise an
 absolute path."
   (let (file-name-handler-alist)
-    (if-let ((path (doom-module-expand-path key file)))
+    (if-let* ((path (doom-module-expand-path key file)))
         (if (or (null file)
                 (file-exists-p path))
             path)
@@ -1511,18 +1443,20 @@ To interpolate dynamic values, use comma:
 
 For more about modules and flags, see `doom!'."
   (if (keywordp group)
-      (if flags
-          `(doom-module--has-flag-p
-            (doom-module (backquote ,group) (backquote ,module) :flags)
-            (backquote ,flags))
-        `(and (get (backquote ,group) (backquote ,module)) t))
+      (let ((ctxtform `(get (backquote ,group) (backquote ,module))))
+        (if flags
+            `(when-let* ((ctxt ,ctxtform))
+               (doom-module--has-flag-p
+                (doom-module-context-flags ctxt)
+                (backquote ,flags)))
+          `(and ,ctxtform t)))
     (let ((flags (delq nil (cons group (cons module flags)))))
       (if (doom-module-context-index doom-module-context)
           `(doom-module--has-flag-p
             ',(doom-module-context-flags doom-module-context)
             (backquote ,flags))
         `(let ((file (file!)))
-           (if-let ((module (doom-module-from-path file)))
+           (if-let* ((module (doom-module-from-path file)))
                (doom-module--has-flag-p
                 (doom-module (car module) (cdr module) :flags)
                 (backquote ,flags))
@@ -1729,9 +1663,9 @@ If DEFAULT? is non-nil, an unspecified CAR/CDR will fall bakc to (_default .
   "Return PROFILE-NAME's PROFILE, otherwise its PROPERTY, otherwise NULL-VALUE."
   (when (stringp profile-name)
     (setq profile-name (intern profile-name)))
-  (if-let (profile (assq profile-name (doom-profiles)))
+  (if-let* ((profile (assq profile-name (doom-profiles))))
       (if property
-          (if-let (propval (assq property (cdr profile)))
+          (if-let* ((propval (assq property (cdr profile))))
               (cdr propval)
             null-value)
         profile)

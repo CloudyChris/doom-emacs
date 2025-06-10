@@ -18,6 +18,11 @@
 ;; Enable the mouse in terminal Emacs
 (add-hook 'tty-setup-hook #'xterm-mouse-mode)
 
+;; Support for child frames in terminal frames was added in 31. Enable it, if it
+;; is available.
+(when (featurep 'tty-child-frames)
+  (add-hook 'tty-setup-hook #'tty-tip-mode))
+
 ;; Windows terminals don't support what I'm about to do, but best not to wrap
 ;; this in an OS check, in case you're using WSL or Cygwin, which *might*
 ;; support it.
@@ -46,25 +51,14 @@
 
 ;; Add support for the Kitty keyboard protocol.
 (use-package! kkp
-  :hook (after-init . global-kkp-mode)
+  :hook (tty-setup . global-kkp-mode)
   :config
-  ;; HACK: Emacs falls back to RET, TAB, and/or DEL if [return], [tab], and/or
-  ;;   [backspace] are unbound, but this isn't the case for all input events,
-  ;;   like these, which don't fall back to M-RET, M-TAB, etc. Therefore making
-  ;;   these keybinds inaccessible in KKP supported terminals.
-  ;; REVIEW: See benjaminor/kkp#13.
-  (define-key! local-function-key-map
-    [M-return] (kbd "M-RET")
-    [M-tab] (kbd "M-TAB")
-    [M-backspace] (kbd "M-DEL")
-    [M-delete] (kbd "M-DEL"))
-
   ;; HACK: Allow C-i to function independently of TAB in KKP-supported
   ;;   terminals. Requires the `input-decode-map' entry in
   ;;   lisp/doom-keybinds.el.
   (define-key! key-translation-map
-    [?\C-i] (cmd! (if-let (((kkp--terminal-has-active-kkp-p))
-                           (keys (this-single-command-raw-keys))
-                           ((> (length keys) 2))
-                           ((equal (cl-subseq keys -3) [27 91 49])))
+    [?\C-i] (cmd! (if-let* (((kkp--this-terminal-has-active-kkp-p))
+                            (keys (this-single-command-raw-keys))
+                            ((> (length keys) 2))
+                            ((equal (cl-subseq keys -3) [27 91 49])))
                       [C-i] [?\C-i]))))

@@ -6,13 +6,12 @@
 (package! yard-mode :pin "de1701753a64544c3376b015805f3661136d8038")
 
 ;; REPL
-(package! inf-ruby :pin "6399a3668224aa48423c54e81383f73e5e39439a")
+(package! inf-ruby :pin "b8076aad10dfb0ba1e3a8b0d39c2b370dbe96ab0")
 (when (modulep! :completion company)
   (package! company-inf-ruby :pin "fe3e4863bc971fbb81edad447efad5795ead1b17"))
 
 ;; Programming environment
 (package! rubocop :pin "f5fd18aa810c3d3269188cbbd731ddc09006f8f5")
-(package! robe :pin "6bc8a07fc483407971de0966d367a11006b3ab80")
 
 ;; Project tools
 (package! bundler :pin "43efb6be4ed118b06d787ce7fbcffd68a31732a7")

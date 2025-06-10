@@ -31,29 +31,36 @@
       avy-single-candidate-jump nil)
 
 
-(after! epa
-  ;; With GPG 2.1+, this forces gpg-agent to use the Emacs minibuffer to prompt
-  ;; for the key passphrase.
-  (set 'epg-pinentry-mode 'loopback)
-  ;; Default to the first enabled and non-expired key in your keyring.
-  (setq-default
-   epa-file-encrypt-to
-   (or (default-value 'epa-file-encrypt-to)
-       (unless (string-empty-p user-full-name)
-         (when-let (context (ignore-errors (epg-make-context)))
-           (cl-loop for key in (epg-list-keys context user-full-name 'public)
-                    for subkey = (car (epg-key-sub-key-list key))
-                    if (not (memq 'disabled (epg-sub-key-capability subkey)))
-                    if (< (or (epg-sub-key-expiration-time subkey) 0)
-                          (time-to-seconds))
-                    collect (epg-sub-key-fingerprint subkey))))
-       user-mail-address))
-   ;; And suppress prompts if epa-file-encrypt-to has a default value (without
-   ;; overwriting file-local values).
-  (defadvice! +default--dont-prompt-for-keys-a (&rest _)
-    :before #'epa-file-write-region
-    (unless (local-variable-p 'epa-file-encrypt-to)
-      (setq-local epa-file-encrypt-to (default-value 'epa-file-encrypt-to)))))
+(when (modulep! +gnupg)
+  ;; By default, Emacs stores `authinfo' in $HOME and in plain-text. Let's not
+  ;; do that, mkay? This file stores usernames, passwords, and other treasures
+  ;; for the aspiring malicious third party. You'll need a GPG setup though.
+  (setq auth-sources (list (file-name-concat doom-profile-state-dir "authinfo.gpg")
+                           "~/.authinfo.gpg"))
+
+  (after! epa
+    ;; With GPG 2.1+, this forces gpg-agent to use the Emacs minibuffer to
+    ;; prompt for the key passphrase.
+    (set 'epg-pinentry-mode 'loopback)
+    ;; Default to the first enabled and non-expired key in your keyring.
+    (setq-default
+     epa-file-encrypt-to
+     (or (default-value 'epa-file-encrypt-to)
+         (unless (string-empty-p user-full-name)
+           (when-let (context (ignore-errors (epg-make-context)))
+             (cl-loop for key in (epg-list-keys context user-full-name 'public)
+                      for subkey = (car (epg-key-sub-key-list key))
+                      if (not (memq 'disabled (epg-sub-key-capability subkey)))
+                      if (< (or (epg-sub-key-expiration-time subkey) 0)
+                            (time-to-seconds))
+                      collect (epg-sub-key-fingerprint subkey))))
+         user-mail-address))
+    ;; And suppress prompts if epa-file-encrypt-to has a default value (without
+    ;; overwriting file-local values).
+    (defadvice! +default--dont-prompt-for-keys-a (&rest _)
+      :before #'epa-file-write-region
+      (unless (local-variable-p 'epa-file-encrypt-to)
+        (setq-local epa-file-encrypt-to (default-value 'epa-file-encrypt-to))))))
 
 
 (after! woman
@@ -74,6 +81,31 @@
 ;;;###package tramp
 (unless (featurep :system 'windows)
   (setq tramp-default-method "ssh")) ; faster than the default scp
+
+
+;;;###package whitespace
+(add-hook! 'after-change-major-mode-hook :append
+  (defun +emacs-highlight-non-default-indentation-h ()
+    "Highlight whitespace at odds with `indent-tabs-mode'.
+That is, highlight tabs if `indent-tabs-mode' is `nil', and highlight spaces at
+the beginnings of lines if `indent-tabs-mode' is `t'. The purpose is to make
+incorrect indentation in the current buffer obvious to you.
+
+Does nothing if `whitespace-mode' or `global-whitespace-mode' is already active
+or if the current buffer is read-only or not file-visiting."
+    (unless (or (eq major-mode 'fundamental-mode)
+                (bound-and-true-p global-whitespace-mode)
+                (null buffer-file-name)
+                buffer-read-only)
+      (require 'whitespace)
+      (set (make-local-variable 'whitespace-style)
+           (cl-union (if indent-tabs-mode
+                         '(indentation)
+                       '(tabs tab-mark))
+                     (when whitespace-mode
+                       (remq 'face whitespace-active-style))))
+      (cl-pushnew 'face whitespace-style) ; must be first
+      (whitespace-mode +1))))
 
 
 ;;
@@ -313,10 +345,12 @@ Continues comments if executed from a commented line."
         "s-s" #'save-buffer
         "s-x" #'execute-extended-command
         :v "s-x" #'kill-region
-        ;; Buffer-local font scaling
-        "s-+" #'doom/reset-font-size
+        "s-0" #'doom/reset-font-size
+        ;; Global font scaling
         "s-=" #'doom/increase-font-size
+        "s-+" #'doom/increase-font-size
         "s--" #'doom/decrease-font-size
+        "s-_" #'doom/decrease-font-size
         ;; Conventional text-editing keys & motions
         "s-a" #'mark-whole-buffer
         "s-/" (cmd! (save-excursion (comment-line 1)))
@@ -327,7 +361,19 @@ Continues comments if executed from a commented line."
         :gi  [s-right]     #'doom/forward-to-last-non-comment-or-eol
         :gi  [M-backspace] #'backward-kill-word
         :gi  [M-left]      #'backward-word
-        :gi  [M-right]     #'forward-word))
+        :gi  [M-right]     #'forward-word
+        (:when (modulep! :ui workspaces)
+         :g "s-t"   #'+workspace/new
+         :g "s-T"   #'+workspace/display
+         :n "s-1"   #'+workspace/switch-to-0
+         :n "s-2"   #'+workspace/switch-to-1
+         :n "s-3"   #'+workspace/switch-to-2
+         :n "s-4"   #'+workspace/switch-to-3
+         :n "s-5"   #'+workspace/switch-to-4
+         :n "s-6"   #'+workspace/switch-to-5
+         :n "s-7"   #'+workspace/switch-to-6
+         :n "s-8"   #'+workspace/switch-to-7
+         :n "s-9"   #'+workspace/switch-to-final)))
 
 
 ;;
@@ -337,7 +383,7 @@ Continues comments if executed from a commented line."
 ;; universal.
 (define-key! help-map
   ;; new keybinds
-  "'"    #'describe-char
+  "'"    #'doom/describe-char
   "u"    #'doom/help-autodefs
   "E"    #'doom/sandbox
   "M"    #'doom/describe-active-minor-mode
